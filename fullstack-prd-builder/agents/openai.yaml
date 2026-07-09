@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fullstack PRD Builder"
+  short_description: "Generate Spring Boot + Vue3 apps from PRDs"
+  default_prompt: "Use ullstack-prd-builder to build a full-stack app from this PRD document"
