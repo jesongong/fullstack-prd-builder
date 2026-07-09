@@ -39,7 +39,7 @@ User request:
 |       -> Append route to existing router; append API module to existing src/api/.
 |
 +-- "Build complete app from scratch"
-        -> Run all Steps 1-6 in order.
+        -> Run all Steps 1-6 in order (including Step 3.5 seed data and Step 4.0 Redis clarification).
 ```
 
 ## Workflow
@@ -66,12 +66,52 @@ Output the PRD as a markdown file in the project workspace.
 
 ### Step 2: Database Clarification (MANDATORY)
 
-**Before generating any DDL script**, ask the user these two questions:
 
-1. **Database name**: What database name should be used?
-2. **Table prefix**: What prefix should all table names use? (e.g., `sys_`, `t_`, `tb_`)
 
-Wait for the user's answer before proceeding to Step 3. Do not assume defaults.
+**Before generating any DDL script**, ask the user these questions in order:
+
+1. **Database type**: Which database will you use?
+   - MySQL 8.0 (Recommended)
+   - MySQL 5.7
+   - TiDB
+   - ClickHouse
+   - Apache Doris
+   - Apache Hive
+   - Oracle
+
+2. **Connection info**: Provide database connection details now, or configure later?
+   - If **now**: ask for `username`, `password`, `host` (server IP/hostname), `port`
+     After the user provides credentials, also ask:
+     a. **DDL execution on startup**: Should the backend auto-execute DDL (create/update tables) on startup?
+        - `update` (Recommended) — update schema without dropping data
+        - `create` — drop and recreate tables on every startup (dev only)
+        - `validate` — check schema matches entities, fail if mismatch (production-safe)
+        - `none` — no automatic DDL execution
+        - Choice affects `spring.jpa.hibernate.ddl-auto` (JPA) or `mybatis-plus.global-config.db-config.auto-init` (MyBatis-Plus).
+     b. **Seed data execution on startup**: Should the backend execute `seed-data.sql` on startup?
+        - If **yes**: configure `spring.sql.init.mode: always` and `spring.sql.init.data-locations: classpath:seed-data.sql` in `application.yml`.
+        - If **no**: set `spring.sql.init.mode: never` (default).
+   - If **later**: leave `application.yml` datasource values as placeholders
+
+3. **Database name**: What database name should be used?
+
+4. **Table prefix**: What prefix should all table names use? (e.g., `sys_`, `t_`, `tb_`)
+
+Wait for the user's answers before proceeding to Step 3. Do not assume defaults.
+
+**Database type impact on configuration**:
+
+| Database   | JDBC Driver / Maven dependency                | Dialect / URL notes                                      |
+|------------|-----------------------------------------------|----------------------------------------------------------|
+| MySQL 8.0  | `mysql-connector-j` (JDK17) / `mysql-connector-java` (JDK8) | `jdbc:mysql://...`; JPA: `MySQL8Dialect`                  |
+| MySQL 5.7  | `mysql-connector-java`                         | `jdbc:mysql://...`; JPA: `MySQL57Dialect`                 |
+| TiDB       | `mysql-connector-j`                            | `jdbc:mysql://...` (MySQL-compatible); no extra dep       |
+| ClickHouse | `clickhouse-jdbc` (`com.clickhouse:clickhouse-jdbc`) | `jdbc:clickhouse://...`; JPA dialect not applicable       |
+| Doris      | `mysql-connector-j`                            | `jdbc:mysql://...` (MySQL-compatible, FE node port 9030)  |
+| Hive       | `hive-jdbc` (`org.apache.hive:hive-jdbc`)      | `jdbc:hive2://...`; JPA dialect not applicable            |
+| Oracle     | `ojdbc8` (`com.oracle.database.jdbc:ojdbc8`)   | `jdbc:oracle:thin:@//host:port/service`; JPA: `Oracle12cDialect` |
+
+> For ClickHouse, Hive, and Oracle, JPA/MyBatis-Plus auto-DDL (`ddl-auto: update`) is not recommended. Generate DDL manually and set `ddl-auto: none` (ClickHouse/Hive) or `ddl-auto: validate` (Oracle). Oracle DDL must use `VARCHAR2` instead of `VARCHAR`, `NUMBER` instead of `BIGINT`/`DECIMAL`, and `CLOB` for large text.
 
 ### Step 3: Generate Database DDL
 
@@ -80,6 +120,18 @@ Using the confirmed database name and table prefix from Step 2, generate the DDL
 - Every business table must include the 4 mandatory audit fields. See [references/database-standards.md](references/database-standards.md).
 - Table names and column names use snake_case.
 - Generate a single `schema.sql` file containing all `CREATE TABLE` statements plus indexes and comments.
+
+### Step 3.5: Seed Data Clarification (OPTIONAL)
+
+After generating the DDL, ask the user:
+
+> **Generate initial seed data script?** (yes/no)
+
+- If **yes**: generate a `seed-data.sql` file with realistic sample data including:
+  - Standard chart of accounts / reference data suited to the domain
+  - 3-5 sample business records demonstrating different statuses (e.g., DRAFT, APPROVED, POSTED)
+  - Debit/credit balanced voucher details where applicable
+- If **no**: skip this step.
 
 ### Step 4: Backend Tech Clarification + Generate Backend Code
 
@@ -90,9 +142,24 @@ Before generating any backend code, ask the user these questions:
 1. **JDK version**: JDK 8 or JDK 17?
 2. **Persistence framework**: MyBatis-Plus or JPA (Spring Data JPA)?
 
+3. **Connection pool**: Which connection pool library will you use?
+   - **HikariCP** (Recommended) — Spring Boot default, lightweight and performance-oriented
+   - **Druid** — Alibaba open-source; choose when you need deep SQL monitoring, security auditing, and O&M convenience
+
 If the user chooses JDK 17, also ask:
 
-3. **Spring AI**: Do you want to include Spring AI for LLM integration? (yes/no)
+4. **Spring AI**: Do you want to include Spring AI for LLM integration? (yes/no)
+   - If **yes**, ask: "Provide Spring AI credentials now, or configure later?"
+     - If **now**: ask for `api-key` and `model` (e.g., `gpt-4o`, `gpt-4o-mini`)
+     - If **later**: leave `spring.ai.openai.api-key` and `spring.ai.openai.chat.options.model` as placeholders in `application.yml`
+
+Regardless of JDK version, also ask:
+
+5. **Redis**: Do you want to include Redis for caching/session management? (yes/no)
+   - If **yes**, ask: "Provide Redis connection info now, or configure later?"
+     - If **now**: ask for `host`, `port`, `password` (optional), `database` index
+     - If **later**: leave `application.yml` Redis values as placeholders
+   - If Redis is selected: add `spring-boot-starter-data-redis` to pom.xml; configure `spring.data.redis.*` in application.yml; generate `RedisConfig.java` in `{basePackage}/config/`
 
 Wait for the user's answers. These choices determine:
 
@@ -102,7 +169,10 @@ Wait for the user's answers. These choices determine:
 | JDK 17 | java.version=17; Spring Boot 3.3.5; Spring AI available; use records; MySQL driver: mysql-connector-j |
 | MyBatis-Plus | BaseMapper, @TableName, MetaObjectHandler, MybatisPlusConfig |
 | JPA | JpaRepository, @Entity, @MappedSuperclass, @EntityListeners, AuditingEntityListener |
+| HikariCP | Spring Boot default; configure `spring.datasource.hikari.*` in application.yml; no extra dependency |
+| Druid | Add `druid-spring-boot-starter` (`com.alibaba:druid-spring-boot-starter`); configure `spring.datasource.druid.*`; generate `DruidConfig.java` with `StatViewServlet` and `WebStatFilter` in `{basePackage}/config/` |
 | Spring AI (JDK 17 only) | spring-ai-openai-spring-boot-starter in pom.xml; spring.ai config in application.yml |
+| Redis | spring-boot-starter-data-redis in pom.xml; spring.data.redis config in application.yml; RedisConfig.java |
 
 #### Step 4.1: Copy Infrastructure Templates
 
@@ -117,6 +187,9 @@ Based on the choices above, copy the matching infrastructure files.
 - `assets/backend-template/mybatis-plus/MyMetaObjectHandler.java` -> `{basePackage}/config/`
 - `assets/backend-template/mybatis-plus/pom.xml` -> project root
 - `assets/backend-template/mybatis-plus/application.yml` -> `src/main/resources/`
+- `assets/backend-template/mybatis-plus/application-dev.yml` -> `src/main/resources/`
+- `assets/backend-template/mybatis-plus/application-test.yml` -> `src/main/resources/`
+- `assets/backend-template/mybatis-plus/application-prod.yml` -> `src/main/resources/`
 
 **If JPA**:
 - `assets/backend-template/jpa/BaseEntity.java` -> `{basePackage}/entity/` (use for JDK 8 / SB 2.7; javax.persistence imports)
@@ -124,6 +197,9 @@ Based on the choices above, copy the matching infrastructure files.
 - `assets/backend-template/jpa/JpaAuditConfig.java` -> `{basePackage}/config/`
 - `assets/backend-template/jpa/pom.xml` -> project root
 - `assets/backend-template/jpa/application.yml` -> `src/main/resources/`
+- `assets/backend-template/jpa/application-dev.yml` -> `src/main/resources/`
+- `assets/backend-template/jpa/application-test.yml` -> `src/main/resources/`
+- `assets/backend-template/jpa/application-prod.yml` -> `src/main/resources/`
 
 **Template placeholders to replace**:
 - `{{basePackage}}` with the Java base package (e.g., `com.example.ordermanage`)
@@ -136,6 +212,26 @@ Based on the choices above, copy the matching infrastructure files.
 **Template conditionals** (Mustache-style `{{#springAi}}...{{/springAi}}`):
 - If Spring AI is selected: keep the content between `{{#springAi}}` and `{{/springAi}}`, then remove the tags.
 - If Spring AI is NOT selected: remove everything from `{{#springAi}}` through `{{/springAi}}`, including the tags.
+
+**Multi-environment configuration** (MANDATORY):
+
+The main `application.yml` must set the dev profile as the active default:
+
+```yaml
+spring:
+  profiles:
+    active: dev
+```
+
+Then generate 3 environment-specific config files alongside `application.yml`:
+
+| File | Purpose | Key settings |
+|------|---------|-------------|
+| `application-dev.yml` | Local development | `server.port: 8080`; `spring.jpa.show-sql: true`; `logging.level.{basePackage}: DEBUG`; datasource pointing to localhost (or user-provided dev connection) |
+| `application-test.yml` | Test/staging environment | `server.port: 8081`; `spring.jpa.show-sql: false`; `logging.level.{basePackage}: INFO`; datasource placeholders for test server |
+| `application-prod.yml` | Production environment | `server.port: 8080`; `spring.jpa.show-sql: false`; `logging.level.{basePackage}: WARN`; datasource placeholders for production server; include connection pool tuning: `hikari.maximum-pool-size: 20`, `hikari.minimum-idle: 5` |
+
+If the user provided connection info in Step 2, fill `application-dev.yml` datasource with those values. Leave test/prod datasources as `{{placeholder}}` unless user provides them explicitly.
 
 Then generate business code following this layered structure (same regardless of persistence choice):
 
