@@ -78,6 +78,7 @@ Output the PRD as a markdown file in the project workspace.
    - Apache Doris
    - Apache Hive
    - Oracle
+   - H2 (embedded / in-memory, for dev/testing)
 
 2. **Connection info**: Provide database connection details now, or configure later?
    - If **now**: ask for `username`, `password`, `host` (server IP/hostname), `port`
@@ -110,6 +111,7 @@ Wait for the user's answers before proceeding to Step 3. Do not assume defaults.
 | Doris      | `mysql-connector-j`                            | `jdbc:mysql://...` (MySQL-compatible, FE node port 9030)  |
 | Hive       | `hive-jdbc` (`org.apache.hive:hive-jdbc`)      | `jdbc:hive2://...`; JPA dialect not applicable            |
 | Oracle     | `ojdbc8` (`com.oracle.database.jdbc:ojdbc8`)   | `jdbc:oracle:thin:@//host:port/service`; JPA: `Oracle12cDialect` |
+| H2         | `h2` (`com.h2database:h2`)                      | `jdbc:h2:mem:testdb` (in-memory) or `jdbc:h2:file:~/data` (file); JPA: `H2Dialect` |
 
 > For ClickHouse, Hive, and Oracle, JPA/MyBatis-Plus auto-DDL (`ddl-auto: update`) is not recommended. Generate DDL manually and set `ddl-auto: none` (ClickHouse/Hive) or `ddl-auto: validate` (Oracle). Oracle DDL must use `VARCHAR2` instead of `VARCHAR`, `NUMBER` instead of `BIGINT`/`DECIMAL`, and `CLOB` for large text.
 
@@ -167,7 +169,8 @@ Wait for the user's answers. These choices determine:
 |--------|--------|
 | JDK 8 | java.version=8; Spring Boot 2.7.18; no Spring AI; MySQL driver: mysql-connector-java |
 | JDK 17 | java.version=17; Spring Boot 3.3.5; Spring AI available; use records; MySQL driver: mysql-connector-j |
-| MyBatis-Plus | BaseMapper, @TableName, MetaObjectHandler, MybatisPlusConfig |
+| MyBatis-Plus (JDK 8) | mybatis-plus-boot-starter 3.5.3.1; no extra jsqlparser or mybatis-spring deps needed |
+| MyBatis-Plus (JDK 17) | mybatis-plus-boot-starter 3.5.16 + mybatis-plus-jsqlparser 3.5.16 + mybatis-spring 3.0.3 |
 | JPA | JpaRepository, @Entity, @MappedSuperclass, @EntityListeners, AuditingEntityListener |
 | HikariCP | Spring Boot default; configure `spring.datasource.hikari.*` in application.yml; no extra dependency |
 | Druid | Add `druid-spring-boot-starter` (`com.alibaba:druid-spring-boot-starter`); configure `spring.datasource.druid.*`; generate `DruidConfig.java` with `StatViewServlet` and `WebStatFilter` in `{basePackage}/config/` |
@@ -206,7 +209,14 @@ Based on the choices above, copy the matching infrastructure files.
 - `{{groupId}}` / `{{artifactId}}` in pom.xml
 - `{{javaVersion}}` in pom.xml: set to `8` or `17` per Step 4.0
 - `{{springBootVersion}}` in pom.xml: set to `2.7.18` (JDK 8) or `3.3.5` (JDK 17)
-- `{{mysqlConnector}}` in pom.xml: set to `mysql-connector-java` (JDK 8) or `mysql-connector-j` (JDK 17)
+- `{{dbDriver}}` in pom.xml: set according to the database type chosen in Step 2 (see mapping below)
+  - MySQL 8.0 / TiDB / Doris: `mysql-connector-j` (JDK17) or `mysql-connector-java` (JDK8)
+  - MySQL 5.7: `mysql-connector-java` 5.1.49
+  - ClickHouse: `com.clickhouse:clickhouse-jdbc` 0.6.0
+  - Hive: `org.apache.hive:hive-jdbc` 3.1.3
+  - Oracle: `com.oracle.database.jdbc:ojdbc8` 21.1.0.0
+  - H2: `com.h2database:h2` (scope: runtime)
+- `{{mybatisPlusVersion}}` in pom.xml: set to `3.5.3.1` (JDK 8) or `3.5.16` (JDK 17), only when MyBatis-Plus is selected
 - `{{dbName}}` in application.yml (from Step 2)
 
 **Template conditionals** (Mustache-style `{{#springAi}}...{{/springAi}}`):
