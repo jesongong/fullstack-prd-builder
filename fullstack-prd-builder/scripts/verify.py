@@ -4,7 +4,7 @@ Quick verification script for fullstack-prd-builder output.
 
 Checks:
   1. DDL: every table has CREATE_USER, CREATE_TIME, UPDATE_USER, UPDATE_TIME
-  2. Backend: GlobalExceptionHandler exists and catches MethodArgumentNotValidException + RuntimeException
+  2. Backend: GlobalExceptionHandler exists and catches 15+ required exception types
   3. Backend: BaseEntity exists with 4 audit fields
   4. Backend: Controller paths match PRD API doc paths
   5. Frontend: request.js exists with both interceptors
@@ -84,22 +84,46 @@ def check_ddl(output_dir):
     return all_ok
 
 def check_backend_exception(output_dir):
-    """Verify GlobalExceptionHandler catches both exception types."""
+    """Verify GlobalExceptionHandler catches required exception types."""
     print("\n[2] GlobalExceptionHandler")
     path = find_java(output_dir, "GlobalExceptionHandler")
     if not path:
         return fail("GlobalExceptionHandler.java not found")
-    has_valid  = "MethodArgumentNotValidException" in path.read_text(encoding='utf-8')
-    has_runtime = "RuntimeException" in path.read_text(encoding='utf-8')
+    
+    content = path.read_text(encoding='utf-8')
     all_ok = True
-    if not has_valid:
-        all_ok = fail("Missing MethodArgumentNotValidException handler")
-    else:
-        ok("Catches MethodArgumentNotValidException")
-    if not has_runtime:
-        all_ok = fail("Missing RuntimeException handler")
-    else:
-        ok("Catches RuntimeException")
+    
+    # Required exception types that must be caught
+    required = [
+        ("MethodArgumentNotValidException", 400),
+        ("BindException", 400),
+        ("ConstraintViolationException", 400),
+        ("HttpMessageNotReadableException", 400),
+        ("MissingServletRequestParameterException", 400),
+        ("TypeMismatchException", 400),
+        ("IllegalArgumentException", 400),
+        ("HttpRequestMethodNotSupportedException", 405),
+        ("HttpMediaTypeNotSupportedException", 415),
+        ("NoHandlerFoundException", 404),
+        ("DuplicateKeyException", 409),
+        ("DataIntegrityViolationException", 409),
+        ("HttpMessageNotWritableException", 500),
+        ("RuntimeException", 500),
+        ("Exception", 500),
+    ]
+    
+    for exc_name, code in required:
+        if exc_name in content:
+            ok(f"Catches {exc_name} ({code})")
+        else:
+            all_ok = fail(f"Missing {exc_name} handler")
+    
+    # Optional but recommended
+    optional = ["AccessDeniedException", "NoResourceFoundException"]
+    for exc_name in optional:
+        if exc_name in content:
+            ok(f"Catches {exc_name} (optional)")
+    
     return all_ok
 
 def check_backend_base_entity(output_dir):

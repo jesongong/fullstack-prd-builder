@@ -66,33 +66,6 @@ public interface UserService {
 
 Every project must include `GlobalExceptionHandler`:
 
-```java
-package {basePackage}.exception;
-
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-@RestControllerAdvice
-public class GlobalExceptionHandler {
-
-    // Validation errors from @Valid
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public Result<Void> handleValidation(MethodArgumentNotValidException e) {
-        String msg = e.getBindingResult().getFieldErrors().stream()
-            .map(FieldError::getDefaultMessage)
-            .collect(Collectors.joining(", "));
-        return Result.error(400, msg);
-    }
-
-    // Generic runtime exceptions
-    @ExceptionHandler(RuntimeException.class)
-    public Result<Void> handleRuntime(RuntimeException e) {
-        return Result.error(500, e.getMessage());
-    }
-}
-```
 
 ## 4. BaseEntity (MANDATORY)
 
@@ -176,3 +149,58 @@ Controller `@RequestMapping` paths **must match** the API paths defined in the P
 PRD API doc:  GET  /api/user-manage/page  ->  @GetMapping("/page") on @RequestMapping("/api/user-manage")
 PRD API doc:  POST /api/user-manage       ->  @PostMapping on @RequestMapping("/api/user-manage")
 ```
+
+Every project must include `GlobalExceptionHandler` that catches the following exception types
+(see `assets/backend-template/GlobalExceptionHandler.java` for the full annotated implementation):
+
+### 400 Bad Request — Client input / validation errors
+
+| Exception | Trigger |
+|-----------|---------|
+| `MethodArgumentNotValidException` | `@Valid` on `@RequestBody` DTO fails |
+| `BindException` | `@Valid` on a form-bind target |
+| `ConstraintViolationException` | `@Validated` on path/query params |
+| `HttpMessageNotReadableException` | Missing/malformed JSON request body |
+| `MissingServletRequestParameterException` | Required query param is absent |
+| `TypeMismatchException` | Type conversion fails (e.g., "abc" -> Long) |
+| `IllegalArgumentException` | Invalid method argument |
+
+### 403 Forbidden
+
+| Exception | Trigger |
+|-----------|---------|
+| `AccessDeniedException` | Spring Security — no permission / role mismatch |
+
+### 404 Not Found
+
+| Exception | Trigger |
+|-----------|---------|
+| `NoHandlerFoundException` | No handler mapped for the requested URL |
+| `NoResourceFoundException` (JDK 17 / SB 3.x only) | Static resource not found |
+
+### 405 / 415 — HTTP method / media type
+
+| Exception | Trigger |
+|-----------|---------|
+| `HttpRequestMethodNotSupportedException` | Wrong HTTP method (GET on POST-only endpoint) |
+| `HttpMediaTypeNotSupportedException` | Wrong Content-Type header |
+
+### 409 Conflict — Data integrity
+
+| Exception | Trigger |
+|-----------|---------|
+| `DuplicateKeyException` | Unique index / primary key violation |
+| `DataIntegrityViolationException` | Any DB constraint violation (not null, check, FK, etc.) |
+
+### 500 Internal Server Error — Server-side failures
+
+| Exception | Trigger |
+|-----------|---------|
+| `HttpMessageNotWritableException` | Failed to serialize response to JSON |
+| `RuntimeException` | Generic unanticipated runtime errors |
+| `Exception` | Ultimate catch-all for anything else |
+
+All handlers use `@ResponseStatus` to set the correct HTTP status code and `log.warn`/`log.error`
+for observability. The catch-all `Exception` handler masks internal details from the client
+(returns a generic message), while the `RuntimeException` handler exposes the message for
+developer convenience in non-production environments.
