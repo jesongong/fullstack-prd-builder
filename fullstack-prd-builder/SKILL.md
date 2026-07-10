@@ -85,10 +85,10 @@ Output the PRD as a markdown file in the project workspace.
    - If **now**: ask for `username`, `password`, `host` (server IP/hostname), `port`
      After the user provides credentials, also ask:
      a. **DDL execution on startup**: Should the backend auto-execute DDL (create/update tables) on startup?
-        - `update` (Recommended) â€?update schema without dropping data
-        - `create` â€?drop and recreate tables on every startup (dev only)
-        - `validate` â€?check schema matches entities, fail if mismatch (production-safe)
-        - `none` â€?no automatic DDL execution
+        - `update` (Recommended) â€”update schema without dropping data
+        - `create` â€”drop and recreate tables on every startup (dev only)
+        - `validate` â€”check schema matches entities, fail if mismatch (production-safe)
+        - `none` â€”no automatic DDL execution
         - Choice affects `spring.jpa.hibernate.ddl-auto` (JPA) or `mybatis-plus.global-config.db-config.auto-init` (MyBatis-Plus).
      b. **Seed data execution on startup**: Should the backend execute `seed-data.sql` on startup?
         - If **yes**: configure `spring.sql.init.mode: always` and `spring.sql.init.data-locations: classpath:seed-data.sql` in `application.yml`.
@@ -146,8 +146,8 @@ Before generating any backend code, ask the user these questions:
 2. **Persistence framework**: MyBatis-Plus or JPA (Spring Data JPA)?
 
 3. **Connection pool**: Which connection pool library will you use?
-   - **HikariCP** (Recommended) â€?Spring Boot default, lightweight and performance-oriented
-   - **Druid** â€?Alibaba open-source; choose when you need deep SQL monitoring, security auditing, and O&M convenience
+   - **HikariCP** (Recommended) â€”Spring Boot default, lightweight and performance-oriented
+   - **Druid** â€”Alibaba open-source; choose when you need deep SQL monitoring, security auditing, and O&M convenience
 
 If the user chooses JDK 17, also ask:
 
@@ -220,9 +220,9 @@ Based on the choices above, copy the matching infrastructure files.
 - `{{mybatisPlusVersion}}` in pom.xml: set to `3.5.3.1` (JDK 8) or `3.5.16` (JDK 17), only when MyBatis-Plus is selected
 - `{{dbName}}` in application.yml (from Step 2)
 
-**Template conditionals** (Mustache-style):
-- `{{#jdk17}}...{{/jdk17}}`: keep inner content only when JDK 17 is selected (used for `ConstraintViolationException` import ¡ª `jakarta.validation` vs `javax.validation` ¡ª and `NoResourceFoundException` handler).
-- `{{^jdk17}}...{{/jdk17}}`: keep inner content only when JDK 8 is selected (inverted conditional).
+**Template conditionals** (Mustache-style):
+- `{{#jdk17}}...{{/jdk17}}`: keep inner content only when JDK 17 is selected (used for `ConstraintViolationException` import â†’ `jakarta.validation` vs `javax.validation` â†’ and `NoResourceFoundException` handler).
+- `{{^jdk17}}...{{/jdk17}}`: keep inner content only when JDK 8 is selected (inverted conditional).
 - `{{#springAi}}...{{/springAi}}`: keep inner content only when Spring AI is selected.
 - If Spring AI is selected: keep the content between `{{#springAi}}` and `{{/springAi}}`, then remove the tags.
 - If Spring AI is NOT selected: remove everything from `{{#springAi}}` through `{{/springAi}}`, including the tags.
@@ -337,22 +337,24 @@ After Step 6 verification passes, ask the user:
 ```
 src/test/
   java/{basePackage}/
-    controller/   # @WebMvcTest ¡ª mock Service layer, test request/response, validation, error paths
-    service/      # @SpringBootTest / unit tests ¡ª test business logic, edge cases, transaction rollback
-    repository/   # @DataJpaTest (JPA) / @MybatisPlusTest (MP) ¡ª test queries, inserts, constraints
+    controller/   # @WebMvcTest â†’ mock Service layer, test request/response, validation, error paths
+    service/      # @SpringBootTest / unit tests â†’ test business logic, edge cases, transaction rollback
+    repository/   # @DataJpaTest (JPA) / @MybatisPlusTest (MP) â†’ test queries, inserts, constraints
 ```
 
 **Backend test requirements** (JUnit 5 + Mockito + AssertJ):
+- Follow the test case template at [references/test-case-template.md](references/test-case-template.md) for structure, naming, and coverage targets.
 - Each Controller endpoint gets a test class covering:
-  - Happy path (valid input ¡ú 200 + expected response body)
-  - Validation errors (missing required fields ¡ú 400)
-  - Business error paths (duplicate key ¡ú 409, not found ¡ú 404)
+  - Happy path (valid input â†’ 200 + expected response body)
+  - Validation errors (missing required fields â†’ 400)
+  - Business error paths (duplicate key â†’ 409, not found â†’ 404)
   - Pagination edge cases (page=0, page=-1, oversize pageSize)
 - Each Service method gets test coverage for core business logic
 - Repository tests verify custom query methods and audit field auto-fill
 - Total test coverage target: 80%+ line coverage across controller + service layers
 
 **Frontend test requirements** (Vitest + Vue Test Utils):
+- Follow the test case template at [references/test-case-template.md](references/test-case-template.md) for view component tests (rendering, modal, API mock, router) and API module tests.
 - Tests under `src/__tests__/`:
   - Component rendering tests for each view (table renders, form fields exist)
   - Modal open/close and data backfill for edit mode
@@ -374,6 +376,8 @@ src/test/
 - Tests are independent and order-agnostic
 
 - If **no**: skip to Step 7.
+
+**Template reference**: See [references/test-case-template.md](references/test-case-template.md) for the complete test file templates including ControllerTest, ServiceTest, RepositoryTest, View component test, API module test, and test-data.sql.
 
 ### Step 7: Auto-Run & Fix (OPTIONAL)
 
@@ -468,8 +472,6 @@ If the page is blank or shows errors:
 
 After all steps pass, output a summary:
 
-```
-=== Build & Test Report ===
 Backend compile:  PASS
 Backend tests:    PASS (X tests, 0 failures)
 Backend startup:  PASS (running on http://localhost:8080)
@@ -477,12 +479,30 @@ Frontend install: PASS
 Frontend dev:     PASS (running on http://localhost:5173)
 Frontend tests:   PASS (X tests, 0 failures)
 Smoke test:       PASS
-===========================
-```
-
-Report any unresolved issues clearly if any step exceeded max fix attempts.
 
 - If the user says **no** to auto-run: skip this step entirely and declare generation complete.
+
+**Detailed test execution report** (MANDATORY): After all steps pass, generate a structured test report markdown file at `<project-root>/TEST-REPORT.md` containing:
+- Follow the report template at [references/test-report-template.md](references/test-report-template.md). Replace all `{{placeholder}}` values with data from the actual test run.
+
+1. **Build summary**: compile status, JDK version, Spring Boot version, persistence framework
+2. **Backend test summary**:
+   - Total tests / passed / failed / skipped / error
+   - Per-module breakdown: Controller tests, Service tests, Repository tests
+   - Per-entity breakdown: which entity classes have test coverage, which don't
+   - Line coverage % (from JaCoCo / surefire reports if available, otherwise estimate)
+   - Execution time (total + per test class)
+3. **Frontend test summary**:
+   - Total tests / passed / failed
+   - Per-view breakdown
+   - Per-API-module breakdown
+   - Execution time
+4. **Auto-fix log** (if any fixes were applied in Steps 7.1-7.6): what failed, what was changed, attempt count
+5. **Smoke test result**: screenshot confirmation, page loaded, navigation verified
+6. **Unresolved issues**: any items that exceeded max fix attempts, with error details and suggested manual fixes
+7. **Overall verdict**: PASS (all green) or PASS WITH NOTES (minor issues remain) or BLOCKED (unresolved critical issues)
+
+Report any unresolved issues clearly if any step exceeded max fix attempts.
 
 ## Coding Standards Reference
 
