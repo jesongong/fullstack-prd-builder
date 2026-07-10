@@ -39,7 +39,8 @@ User request:
 |       -> Append route to existing router; append API module to existing src/api/.
 |
 +-- "Build complete app from scratch"
-        -> Run all Steps 1-6 in order (including Step 3.5 seed data and Step 4.0 Redis clarification).
+        -> Run all Steps 1-7 in order (including Step 3.5 seed data, Step 4.0 Redis clarification,
+            Step 6.5 test case generation, and Step 7 auto-run & fix).
 ```
 
 ## Workflow
@@ -324,6 +325,164 @@ This checks:
 - Frontend: .env.development and Vite proxy configured
 
 Fix any FAIL results before declaring the generation complete.
+
+### Step 6.5: Test Case Generation Clarification (OPTIONAL)
+
+After Step 6 verification passes, ask the user:
+
+> **Generate comprehensive functional test cases covering all API endpoints?** (yes/no)
+
+- If **yes**: generate a complete test suite under `src/test/` with the following structure:
+
+```
+src/test/
+  java/{basePackage}/
+    controller/   # @WebMvcTest ¡ª mock Service layer, test request/response, validation, error paths
+    service/      # @SpringBootTest / unit tests ¡ª test business logic, edge cases, transaction rollback
+    repository/   # @DataJpaTest (JPA) / @MybatisPlusTest (MP) ¡ª test queries, inserts, constraints
+```
+
+**Backend test requirements** (JUnit 5 + Mockito + AssertJ):
+- Each Controller endpoint gets a test class covering:
+  - Happy path (valid input ¡ú 200 + expected response body)
+  - Validation errors (missing required fields ¡ú 400)
+  - Business error paths (duplicate key ¡ú 409, not found ¡ú 404)
+  - Pagination edge cases (page=0, page=-1, oversize pageSize)
+- Each Service method gets test coverage for core business logic
+- Repository tests verify custom query methods and audit field auto-fill
+- Total test coverage target: 80%+ line coverage across controller + service layers
+
+**Frontend test requirements** (Vitest + Vue Test Utils):
+- Tests under `src/__tests__/`:
+  - Component rendering tests for each view (table renders, form fields exist)
+  - Modal open/close and data backfill for edit mode
+  - API mock tests for success/error response handling
+  - Route navigation tests
+
+**Test dependencies to add to pom.xml** (JDK-version-aware):
+- `spring-boot-starter-test` (scope: test, includes JUnit 5, Mockito, AssertJ)
+- `h2` (scope: test, for in-memory DB in repository tests)
+- `com.h2database:h2` (scope: test)
+
+**Frontend test dependencies**:
+- `vitest`, `@vue/test-utils`, `jsdom` (devDependencies in package.json)
+- Add `"test": "vitest run"` to package.json scripts
+
+**Test data strategy**:
+- Use `src/test/resources/test-data.sql` with minimal seed data for test scenarios
+- Each test class uses `@Sql` annotation or `@BeforeEach` to reset state
+- Tests are independent and order-agnostic
+
+- If **no**: skip to Step 7.
+
+### Step 7: Auto-Run & Fix (OPTIONAL)
+
+After code generation and test case generation are complete, ask the user:
+
+> **Automatically start the backend and frontend, run tests, and fix any issues?** (yes/no)
+
+If **yes**, execute the following loop:
+
+#### Step 7.1: Build Backend
+
+```bash
+cd <backend-dir>
+mvn clean compile -DskipTests
+```
+
+If compilation fails:
+- Read the compiler error output.
+- Identify the root cause (missing dependency, type mismatch, import error, etc.).
+- Apply the fix directly to the source files.
+- Re-run `mvn clean compile -DskipTests`.
+- Repeat until compilation succeeds (max 5 fix attempts; if still failing after 5, report unresolved errors to user).
+
+#### Step 7.2: Run Backend Tests
+
+```bash
+cd <backend-dir>
+mvn test
+```
+
+If any test fails:
+- Read the full test failure output (`target/surefire-reports/`).
+- Identify the root cause (assertion mismatch, missing mock, config issue, SQL error, etc.).
+- Apply the fix to the test or source code as appropriate.
+- Re-run `mvn test` for the failed test class only: `mvn test -Dtest=FailedTestClass`.
+- Repeat until all tests pass (max 5 fix attempts; if still failing after 5, report unresolved failures to user).
+
+#### Step 7.3: Start Backend Service
+
+```bash
+cd <backend-dir>
+Start-Process -NoNewWindow mvn -ArgumentList "spring-boot:run" -WorkingDirectory (Get-Location)
+```
+
+Wait for the backend to start (check for "Started Application" in logs, max 60 seconds). If it fails to start:
+- Read the startup error (port conflict, DB connection refused, config error, bean creation failure).
+- Apply the fix.
+- Kill the old process, restart.
+- Repeat until startup succeeds (max 3 fix attempts).
+
+#### Step 7.4: Start Frontend Dev Server
+
+```bash
+cd <frontend-dir>
+npm install
+npm run dev
+```
+
+Wait for "Local:" URL output. If `npm install` or `npm run dev` fails:
+- Read the error (missing package, version conflict, config error).
+- Apply the fix (update package.json, fix vite.config.js, etc.).
+- Re-run.
+- Repeat until the dev server starts (max 3 fix attempts).
+
+#### Step 7.5: Run Frontend Tests
+
+```bash
+cd <frontend-dir>
+npm run test
+```
+
+If any test fails:
+- Read the Vitest output.
+- Identify the root cause (component mismatch, API mock issue, selector error).
+- Apply the fix.
+- Re-run.
+- Repeat until all tests pass (max 5 fix attempts).
+
+#### Step 7.6: Smoke Test (Browser Verification)
+
+Use the in-app browser to navigate to `http://localhost:5173` (Vite default) and verify:
+- The page loads without JS errors in the console.
+- At least one page renders correctly (navigation works).
+- Capture a screenshot for the user.
+
+If the page is blank or shows errors:
+- Inspect the browser console for errors.
+- Fix JS/network issues.
+- Reload and re-verify (max 3 fix attempts).
+
+#### Step 7.7: Final Report
+
+After all steps pass, output a summary:
+
+```
+=== Build & Test Report ===
+Backend compile:  PASS
+Backend tests:    PASS (X tests, 0 failures)
+Backend startup:  PASS (running on http://localhost:8080)
+Frontend install: PASS
+Frontend dev:     PASS (running on http://localhost:5173)
+Frontend tests:   PASS (X tests, 0 failures)
+Smoke test:       PASS
+===========================
+```
+
+Report any unresolved issues clearly if any step exceeded max fix attempts.
+
+- If the user says **no** to auto-run: skip this step entirely and declare generation complete.
 
 ## Coding Standards Reference
 
